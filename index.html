@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>TPS Reports - Contract Sprints & Ramp-Up</title>
+  <meta charset="UTF-8">
+  <title>TPS Reports - Excluding Quarter/Year from Ramp-Up</title>
+
+  <!-- React & Babel from CDN -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
@@ -51,11 +53,13 @@
       display: flex;
       flex-wrap: wrap;
     }
+    /* If isRamping => we show a little star */
     .assignments .ramp {
       color: #d53f8c;
       font-weight: bold;
       margin-left: 3px;
     }
+
     .right-panel {
       border-left: 2px solid #ddd;
       display: flex;
@@ -115,12 +119,9 @@
 
 <script type="text/babel">
 
-/** 
- * We assume 26 sprints/year => cost per sprint = (salary*overhead)/26 
- * Each sprint = 2 weeks => points = role.pointsPerWeek * 2 (or half if ramping).
-**/
-const YEAR_SPRINTS = 26;
-const SPRINT_WEEKS = 2;
+const YEAR_SPRINTS = 26; // cost factor => overhead/26
+// role.pointsPerSprint => points for a full sprint
+// if isRamping => half
 
 const lineItems = [
   { id: 'year-2025', type: 'year',    name: '2025', roles: [], events: [] },
@@ -157,25 +158,20 @@ const lineItems = [
   { id: 'q4s6', type: 'sprint',  name: 'Q4S6', roles: [], events: [] },
 ];
 
-/**
- * Helper: find all sprint indices if user clicks "year", or a quarter, or a single sprint.
- */
 function getSprintIndices(itemIndex) {
-  const item = lineItems[itemIndex];
-  if (item.type === 'year') {
-    // all sprints => 2..28
-    return Array.from({ length: 27 }, (_, i) => i+2); 
-  } else if (item.type === 'quarter') {
-    // gather next sprints until next quarter or end
+  const item=lineItems[itemIndex];
+  if (item.type==='year') {
+    // gather sprints => 2..28
+    return Array.from({length:27}, (_,i)=> i+2);
+  } else if (item.type==='quarter') {
     return gatherQuarterSprints(itemIndex);
   } else {
-    // single sprint => just that index
     return [itemIndex];
   }
 }
 function gatherQuarterSprints(qIndex) {
-  let out = [];
-  let i = qIndex+1;
+  let out=[];
+  let i=qIndex+1;
   while (i<lineItems.length && lineItems[i].type==='sprint') {
     out.push(i);
     i++;
@@ -183,181 +179,147 @@ function gatherQuarterSprints(qIndex) {
   return out;
 }
 
-function TPSReportsApp() {
-  const [items, setItems] = React.useState(lineItems);
-  const [roles, setRoles] = React.useState([]);
-  const [events, setEvents] = React.useState([]);
-  const [reportTargetId, setReportTargetId] = React.useState(null);
+function TPSReportsApp(){
+  const [items, setItems]=React.useState(lineItems);
+  const [roles, setRoles]=React.useState([]);
+  const [events, setEvents]=React.useState([]);
+  const [reportTargetId, setReportTargetId]=React.useState(null);
 
-  /**
-   * Create a new role or event.
-   */
-  function handleAddNewItem() {
-    const kind = prompt('Add "role" or "event"?');
+  function handleAddNewItem(){
+    const kind=prompt('Add "role" or "event"?');
     if (!kind) return;
-
     if (kind.toLowerCase()==='role') {
-      const name = prompt('Role name?');
-      const fte = prompt('Is this FTE? (yes/no)');
-      const salaryStr = prompt('Yearly Salary?');
-      const pointsStr = prompt('Points delivered per week?');
-      const specialty = prompt('Specialty? e.g. "UI"');
-      const rampStr = prompt('How many sprints to ramp up? (0..6)');
+      const name= prompt('Role name?');
+      const fte= prompt('Is this FTE? (yes/no)');
+      const salStr= prompt('Yearly Salary?');
+      const ptsStr= prompt('Points delivered per sprint?');
+      const spec= prompt('Specialty? e.g. "UI"');
+      const rampStr= prompt('How many sprints to ramp up? (0..6)?');
 
-      let isFte = (fte?.toLowerCase()==='yes');
-      let contractLen=null;
-      if (!isFte) {
-        const cStr = prompt('How many total sprints for this contract?');
-        if (cStr) {
-          const cNum = parseInt(cStr,10);
-          if (!isNaN(cNum) && cNum>0) contractLen=cNum;
+      let isFte=(fte?.toLowerCase()==='yes');
+      let cLen=null;
+      if (!isFte){
+        const cStr=prompt('How many total sprints for this contract?');
+        if (cStr){
+          const cNum= parseInt(cStr,10);
+          if (!isNaN(cNum)&& cNum>0) cLen=cNum;
         }
       }
 
       const newRole={
         id: 'role-'+Date.now(),
-        name: name||'Untitled Role',
+        name: name|| 'Untitled Role',
         fte: isFte,
         overheadMultiplier: isFte?1.17:1,
-        salary: Number(salaryStr)||0,
-        pointsPerWeek: Number(pointsStr)||0,
-        specialty: specialty||'generalist',
+        salary: Number(salStr)||0,
+        pointsPerSprint: Number(ptsStr)||0,
+        specialty: spec|| 'generalist',
         rampUpSprints: parseInt(rampStr,10)||0,
-        contractSprints: contractLen, // if null => unlimited
+        contractSprints: cLen, // null => unlimited
       };
-      setRoles(prev=> [...prev, newRole]);
-
+      setRoles(prev=> [...prev,newRole]);
     } else if (kind.toLowerCase()==='event') {
-      const name = prompt('Event name?');
-      const impact = prompt('Impact to shift points? (positive/negative)?');
-      const repeat = prompt('Repeat forever? (yes/no)');
+      const name= prompt('Event name?');
+      const impact= prompt('Impact to shift points? (pos/neg)?');
+      const rep= prompt('Repeat forever? (yes/no)');
       const newEvent={
         id: 'event-'+Date.now(),
         name: name||'Untitled Event',
         impactPoints: Number(impact)||0,
-        repeatForever: (repeat?.toLowerCase()==='yes'),
+        repeatForever: (rep?.toLowerCase()==='yes'),
       };
       setEvents(prev=>[...prev,newEvent]);
-
     } else {
       alert('Invalid type.');
     }
   }
 
   /**
-   * Add a role (could be FTE or contract) from chosen line item onward.
-   * If contract => only up to contractSprints sprints.
-   * Mark each line item whether it's ramping or not, based on usageSoFar < rampUpSprints.
+   * Add role from chosen item forward, counting only real sprints for contract usage and ramp usage.
+   * If lineItem.type === 'sprint', we might increment usageSoFar.
+   * If it's year/quarter => no ramp-up increment.
    */
-  function handleRoleClick(role) {
-    const qtyStr = prompt(`How many of "${role.name}" do you want to add?`, '1');
+  function handleRoleClick(role){
+    const qtyStr= prompt(`How many of "${role.name}"?`, '1');
     if (!qtyStr) return;
-    const qty = parseInt(qtyStr,10);
-    if (isNaN(qty) || qty<=0) {
-      alert('Invalid #');
-      return;
-    }
+    const qty= parseInt(qtyStr,10);
+    if (isNaN(qty)||qty<=0) { alert('Invalid #'); return; }
 
-    const tgt = prompt('Which line item to start on? (e.g. "q3s4" or "year-2025")');
+    const tgt= prompt('Which line item to start on? (e.g. "q3s4")');
     if (!tgt) return;
-    const startIndex= items.findIndex(x=> x.id===tgt);
+    const startIndex= items.findIndex(x=> x.id=== tgt);
     if (startIndex<0){
-      alert('No such line item');
-      return;
-    }
-
-    // We'll do usageSoFar for each of the "qty" clones, so each clone has its own usage count.
-    // That might be overkill if you want them all the same usage, but let's do it anyway for correctness.
-    // Minimal approach: we do a for-loop from 0..(qty-1) => each clone has usageSoFar=0, then we walk line items from startIndex onward. 
-    // If contract => we only do up to contractSprints sprints. 
-    // Each time we add them to a line item, we check usageSoFar < rampUp => isRamping=true else false, usageSoFar++.
-    const newArr = [...items];
-
-    for (let c=0; c<qty; c++){
-      let usageSoFar=0; 
-      let sCount= role.fte? Infinity : (role.contractSprints||0); // Infinity if FTE
-      let lineCount=0; // how many lines we've assigned so far
-
-      for (let i=startIndex; i<newArr.length; i++){
-        const lineItem=newArr[i];
-        // skip if not a "sprint"
-        if (lineItem.type!=='sprint' && lineItem.type!=='year' && lineItem.type!=='quarter') {
-          continue;
-        }
-        if (!role.fte) {
-          // if contract => stop if lineCount >= sCount
-          if (lineCount>= sCount) break;
-        }
-        const isRamping= (usageSoFar<role.rampUpSprints);
-
-        // add to roles array
-        const newRoleObj={
-          roleId: role.id,
-          isRamping,
-        };
-        // push
-        const oldRoles=[...lineItem.roles];
-        oldRoles.push(newRoleObj);
-        newArr[i]={ ...lineItem, roles: oldRoles };
-
-        usageSoFar++;
-        lineCount++;
-      }
-    }
-
-    setItems(newArr);
-  }
-
-  /**
-   * Add an event from line item onward (repeatForever is not fully used here, but let's ignore).
-   */
-  function handleEventClick(ev) {
-    const qtyStr=prompt(`How many of "${ev.name}" to add?`,'1');
-    if (!qtyStr) return;
-    const qty=parseInt(qtyStr,10);
-    if (isNaN(qty)||qty<=0) {
-      alert('Invalid #');
-      return;
-    }
-
-    const tgt=prompt('Which line item to start on?');
-    if (!tgt) return;
-    const startIndex= items.findIndex(x=> x.id===tgt);
-    if (startIndex<0){
-      alert('No such line item');
+      alert('No such line item.');
       return;
     }
 
     const newArr=[...items];
     for (let c=0; c<qty; c++){
-      for (let i=startIndex; i<newArr.length; i++){
-        const lineItem=newArr[i];
-        // skip if not sprint/year/quarter
-        if (lineItem.type!=='sprint' && lineItem.type!=='year' && lineItem.type!=='quarter') continue;
+      let usageSoFar=0; 
+      let maxS= role.fte? Infinity: (role.contractSprints||0);
 
-        const oldE=[...lineItem.events];
-        oldE.push({ eventId: ev.id });
-        newArr[i]={ ...lineItem, events: oldE };
+      for (let i=startIndex; i<newArr.length; i++){
+        const li=newArr[i];
+        // Only add to year/quarter/sprint, skip everything else
+        if (li.type!=='sprint' && li.type!=='year' && li.type!=='quarter') continue;
+
+        // If it's a contract, we only want to actually "use up" sprints if it's a real sprint
+        // Also ramp-up only applies if it's a real sprint
+        let isRamping=false;
+        if (li.type==='sprint') {
+          // contract => if usageSoFar >= maxS => stop
+          if (!role.fte && usageSoFar>= maxS) break;
+
+          // ramp-up => if usageSoFar < role.rampUpSprints => half
+          isRamping= (usageSoFar< role.rampUpSprints);
+          usageSoFar++;
+        } 
+        // If it's year/quarter => we do NOT increment usageSoFar, no ramp.
+
+        // add to this line item
+        const oldRoles=[...li.roles];
+        oldRoles.push({
+          roleId: role.id,
+          isRamping,
+        });
+        newArr[i]={ ...li, roles: oldRoles };
       }
     }
 
     setItems(newArr);
   }
 
-  function handleGenerateReport(itemId) {
-    setReportTargetId(itemId);
+  function handleEventClick(ev){
+    const qtyStr= prompt(`How many of "${ev.name}"?`,'1');
+    if (!qtyStr) return;
+    const qty=parseInt(qtyStr,10);
+    if (isNaN(qty)||qty<=0) {alert('Invalid #');return;}
+
+    const tgt= prompt('Which line item to start on? (e.g. "q2s4")');
+    if (!tgt)return;
+    const startIndex= items.findIndex(x=> x.id===tgt);
+    if (startIndex<0){alert('No item.');return;}
+
+    const newArr=[...items];
+    for (let c=0; c<qty; c++){
+      for (let i=startIndex; i<newArr.length; i++){
+        const li=newArr[i];
+        if (li.type!=='sprint' && li.type!=='year' && li.type!=='quarter') continue;
+        const oldE=[...li.events];
+        oldE.push({ eventId: ev.id });
+        newArr[i]={ ...li, events: oldE };
+      }
+    }
+    setItems(newArr);
   }
 
-  /**
-   * For the aggregator:
-   * We'll gather the sprints that item covers, sum up cost/points, respecting `isRamping` for each role in each sprint. 
-   * cost => (role.salary*role.overhead)/26
-   * if isRamping => half points => role.pointsPerWeek*2 *0.5
-   * else => full
-   */
-  function renderReport() {
+  function handleGenerateReport(id){
+    setReportTargetId(id);
+  }
+
+  function renderReport(){
     if (!reportTargetId) return null;
-    const idx= items.findIndex(x=> x.id===reportTargetId);
+    const idx= items.findIndex(x=> x.id=== reportTargetId);
     if (idx<0) return null;
 
     const item= items[idx];
@@ -368,34 +330,31 @@ function TPSReportsApp() {
     let usedRoles=[];
     let usedEvents=[];
 
-    sprintIndices.forEach((si)=>{
+    sprintIndices.forEach(si=>{
       const sItem= items[si];
-      // roles
-      sItem.roles.forEach((rObj)=>{
-        const rData= roles.find(rr=> rr.id===rObj.roleId);
+      sItem.roles.forEach(rObj=>{
+        // find role data
+        const rData= roles.find(rr=> rr.id=== rObj.roleId);
         if (!rData) return;
-
-        // cost
-        const overhead = rData.salary*rData.overheadMultiplier;
-        const costPerSprint = overhead / YEAR_SPRINTS;
-        totalCost += costPerSprint;
+        // cost => overhead/26
+        const overhead= rData.salary*rData.overheadMultiplier;
+        const cost= overhead/YEAR_SPRINTS;
+        totalCost+= cost;
 
         // points
-        const weeklyPts= rData.pointsPerWeek*SPRINT_WEEKS;
-        const finalPts = rObj.isRamping? (weeklyPts*0.5) : weeklyPts;
+        const basePts= rData.pointsPerSprint;
+        const finalPts= rObj.isRamping? basePts*0.5: basePts;
         totalPoints+= finalPts;
 
-        // track specialty
         if (!breakdownBySpecialty[rData.specialty]){
-          breakdownBySpecialty[rData.specialty]={ cost:0, points:0 };
+          breakdownBySpecialty[rData.specialty]={ cost:0, points:0};
         }
-        breakdownBySpecialty[rData.specialty].cost+= costPerSprint;
+        breakdownBySpecialty[rData.specialty].cost+= cost;
         breakdownBySpecialty[rData.specialty].points+= finalPts;
 
         usedRoles.push({ rData, isRamping: rObj.isRamping });
       });
-      // events
-      sItem.events.forEach((eObj)=>{
+      sItem.events.forEach(eObj=>{
         const eData= events.find(ee=> ee.id=== eObj.eventId);
         if (!eData) return;
         totalPoints+= eData.impactPoints;
@@ -405,20 +364,18 @@ function TPSReportsApp() {
 
     // distinct
     let distinctRoles=[];
-    const seenR= new Set();
-    usedRoles.forEach(ur=>{
-      if (!seenR.has(ur.rData.id)) {
-        distinctRoles.push(ur);
-        seenR.add(ur.rData.id);
+    const seen= new Set();
+    usedRoles.forEach(u=>{
+      if (!seen.has(u.rData.id)){
+        distinctRoles.push(u);
+        seen.add(u.rData.id);
       }
     });
     const distinctEvents= Array.from(new Set(usedEvents));
 
     const totalBoulders= totalPoints/40;
-    const costPerPoint= (totalPoints>0)?(totalCost/ totalPoints):0;
-
-    // if a role had ANY ramping => star
-    const rampedRoleIds = new Set( usedRoles.filter(u=> u.isRamping).map(u=> u.rData.id) );
+    const costPerPoint= (totalPoints>0)? (totalCost/ totalPoints):0;
+    const rampedIds= new Set(usedRoles.filter(u=> u.isRamping).map(u=> u.rData.id));
 
     return (
       <div className="report">
@@ -426,30 +383,30 @@ function TPSReportsApp() {
         <p><strong>Sprints in scope:</strong> {sprintIndices.length}</p>
         <p><strong>Total Cost:</strong> ${Math.round(totalCost).toLocaleString()}</p>
         <p><strong>Total Points:</strong> {Math.round(totalPoints)}</p>
-        <p><strong>Boulders (40 pts):</strong> {totalBoulders.toFixed(2)}</p>
+        <p><strong>Boulders (40pts):</strong> {totalBoulders.toFixed(2)}</p>
         <p><strong>Cost per Point:</strong> ${costPerPoint.toFixed(2)}</p>
 
         <h3>By Specialty</h3>
-        {Object.keys(breakdownBySpecialty).map((spec)=>{
+        {Object.keys(breakdownBySpecialty).map(spec=>{
           const data= breakdownBySpecialty[spec];
-          const cPerP= (data.points>0)?(data.cost/data.points):0;
+          const cperp= (data.points>0)?(data.cost/data.points):0;
           return (
             <div key={spec}>
-              <strong>{spec}:</strong> ${cPerP.toFixed(2)} / point
+              <strong>{spec}:</strong> ${cperp.toFixed(2)}/pt
             </div>
           );
         })}
 
         <h3>Roles in scope</h3>
         <ul>
-          {distinctRoles.map((ur)=>{
-            const star= rampedRoleIds.has(ur.rData.id)? '*':'';
+          {distinctRoles.map(ur=>{
+            const star= rampedIds.has(ur.rData.id)? '*':'';
             return (
               <li key={ur.rData.id}>
-                {ur.rData.name}{star} ({ur.rData.specialty}) 
-                - Salary: ${ur.rData.salary.toLocaleString()}
-                {ur.rData.fte? ' (FTE)': ` (Contract: up to ${ur.rData.contractSprints} sprints)`}
-                , rampUp={ur.rData.rampUpSprints} 
+                {ur.rData.name}{star} ({ur.rData.specialty})
+                — Salary: ${ur.rData.salary.toLocaleString()}
+                {ur.rData.fte? ' (FTE)': ` (Contract up to ${ur.rData.contractSprints} sprints)`}
+                , rampUp={ur.rData.rampUpSprints}, pts/sprint={ur.rData.pointsPerSprint}
               </li>
             );
           })}
@@ -457,46 +414,41 @@ function TPSReportsApp() {
 
         <h3>Events in scope</h3>
         <ul>
-          {distinctEvents.map(e=> (
-            <li key={e.id}>{e.name} (impact={e.impactPoints})</li>
+          {distinctEvents.map(ev=>(
+            <li key={ev.id}>{ev.name} (impact={ev.impactPoints})</li>
           ))}
         </ul>
       </div>
     );
   }
 
-  /**
-   * Rendering the left panel: each line item => show role letters, but if isRamping => letter+*
-   */
-  function renderLineItem(li, idx) {
+  function renderLineItem(li, idx){
     let cssClass='sprint';
     if (li.type==='year') cssClass='year';
     else if (li.type==='quarter') cssClass='quarter';
 
-    // gather a small set of { letter, isRamping } for each role
-    const roleIcons= li.roles.map((ro, i2)=>{
+    const roleIcons= li.roles.map((ro,i2)=>{
       const rData= roles.find(rr=> rr.id=== ro.roleId);
       if (!rData) return null;
-      const letter=rData.name.charAt(0).toUpperCase();
+      const letter= rData.name.charAt(0).toUpperCase();
       return (
         <span key={'r'+i2}>
-          {letter}
-          {ro.isRamping && <span className="ramp">*</span>}
+          {letter}{ro.isRamping && <span className="ramp">*</span>}
         </span>
       );
     }).filter(Boolean);
 
     const eventIcons= li.events.map((eo,i2)=>{
-      const eData= events.find(e=> e.id===eo.eventId);
+      const eData= events.find(ee=> ee.id=== eo.eventId);
       if (!eData) return null;
-      const letter= eData.name.charAt(0).toUpperCase();
-      return (<span key={'e'+i2}>{letter}</span>);
+      const letter=eData.name.charAt(0).toUpperCase();
+      return <span key={'e'+i2}>{letter}</span>;
     }).filter(Boolean);
 
     const combined=[...roleIcons, ...eventIcons];
 
     return (
-      <div 
+      <div
         key={li.id}
         className={`list-item ${cssClass}`}
         onClick={()=> handleGenerateReport(li.id)}
@@ -524,13 +476,13 @@ function TPSReportsApp() {
           </div>
           <div className="roster-items">
             <h4>Roles</h4>
-            {roles.map(r=> (
+            {roles.map(r=>(
               <div 
                 key={r.id}
                 className="roster-item"
                 onClick={()=> handleRoleClick(r)}
               >
-                {r.name} {r.fte? '(FTE)':'(Contract)'} rampUp={r.rampUpSprints}
+                {r.name} {r.fte? '(FTE)': '(Contract)'} rampUp={r.rampUpSprints}, pts/sprint={r.pointsPerSprint}
               </div>
             ))}
             <h4>Events</h4>
