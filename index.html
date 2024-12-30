@@ -1,29 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>TPS Reports - No Drag & Drop, Multi Instances & Cascade</title>
-
-  <!-- React and Babel from CDN (ignore source map warnings). -->
+  <meta charset="UTF-8" />
+  <title>TPS Reports - Contract Sprints & Ramp-Up</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
 
   <style>
     body {
-      margin: 0; padding: 0;
+      margin: 0; 
+      padding: 0;
       font-family: sans-serif;
       color: #333;
     }
-
     .container {
       display: grid;
       grid-template-columns: 1fr 1fr;
       height: 100vh;
       overflow: hidden;
     }
-
-    /* Left: The vertical list */
     .left-panel {
       padding: 1rem;
       background: #f3f4f6;
@@ -36,7 +32,6 @@
       padding: 0.6rem 0.8rem;
       border-radius: 6px;
       cursor: pointer;
-      position: relative;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -56,15 +51,11 @@
       display: flex;
       flex-wrap: wrap;
     }
-    .assignments span {
+    .assignments .ramp {
+      color: #d53f8c;
+      font-weight: bold;
       margin-left: 3px;
-      padding: 2px 4px;
-      background: rgba(0,0,0,0.2);
-      border-radius: 3px;
-      font-size: 0.8rem;
     }
-
-    /* Right: Roster + Report */
     .right-panel {
       border-left: 2px solid #ddd;
       display: flex;
@@ -102,11 +93,11 @@
       user-select: none;
       display: flex;
       align-items: center;
+      transition: background 0.2s;
     }
     .roster-item:hover {
       background: #e2e8f0;
     }
-
     .report-section {
       padding: 1rem;
       flex: 1 1 auto;
@@ -119,375 +110,450 @@
     }
   </style>
 </head>
-
 <body>
-  <div id="root"></div>
+<div id="root"></div>
 
-  <script type="text/babel">
+<script type="text/babel">
 
-    const { useState } = React;
+/** 
+ * We assume 26 sprints/year => cost per sprint = (salary*overhead)/26 
+ * Each sprint = 2 weeks => points = role.pointsPerWeek * 2 (or half if ramping).
+**/
+const YEAR_SPRINTS = 26;
+const SPRINT_WEEKS = 2;
 
-    // Our line items in chronological order:
-    // 0: year-2025
-    // 1: q1
-    // 2..7: q1s1..q1s6
-    // 8: q2
-    // 9..14: q2s1..q2s6
-    // 15: q3
-    // 16..21: q3s1..q3s6
-    // 22: q4
-    // 23..28: q4s1..q4s6
-    const initialLineItems = [
-      { id: 'year-2025', type: 'year',    name: '2025', roles: [], events: [] },
-      { id: 'q1',        type: 'quarter', name: 'Q1',   roles: [], events: [] },
-      { id: 'q1s1',      type: 'sprint',  name: 'Q1S1', roles: [], events: [] },
-      { id: 'q1s2',      type: 'sprint',  name: 'Q1S2', roles: [], events: [] },
-      { id: 'q1s3',      type: 'sprint',  name: 'Q1S3', roles: [], events: [] },
-      { id: 'q1s4',      type: 'sprint',  name: 'Q1S4', roles: [], events: [] },
-      { id: 'q1s5',      type: 'sprint',  name: 'Q1S5', roles: [], events: [] },
-      { id: 'q1s6',      type: 'sprint',  name: 'Q1S6', roles: [], events: [] },
+const lineItems = [
+  { id: 'year-2025', type: 'year',    name: '2025', roles: [], events: [] },
+  { id: 'q1',        type: 'quarter', name: 'Q1',   roles: [], events: [] },
+  { id: 'q1s1', type: 'sprint', name: 'Q1S1', roles: [], events: [] },
+  { id: 'q1s2', type: 'sprint', name: 'Q1S2', roles: [], events: [] },
+  { id: 'q1s3', type: 'sprint', name: 'Q1S3', roles: [], events: [] },
+  { id: 'q1s4', type: 'sprint', name: 'Q1S4', roles: [], events: [] },
+  { id: 'q1s5', type: 'sprint', name: 'Q1S5', roles: [], events: [] },
+  { id: 'q1s6', type: 'sprint', name: 'Q1S6', roles: [], events: [] },
 
-      { id: 'q2',   type: 'quarter', name: 'Q2', roles: [], events: [] },
-      { id: 'q2s1', type: 'sprint',  name: 'Q2S1', roles: [], events: [] },
-      { id: 'q2s2', type: 'sprint',  name: 'Q2S2', roles: [], events: [] },
-      { id: 'q2s3', type: 'sprint',  name: 'Q2S3', roles: [], events: [] },
-      { id: 'q2s4', type: 'sprint',  name: 'Q2S4', roles: [], events: [] },
-      { id: 'q2s5', type: 'sprint',  name: 'Q2S5', roles: [], events: [] },
-      { id: 'q2s6', type: 'sprint',  name: 'Q2S6', roles: [], events: [] },
+  { id: 'q2',   type: 'quarter', name: 'Q2', roles: [], events: [] },
+  { id: 'q2s1', type: 'sprint',  name: 'Q2S1', roles: [], events: [] },
+  { id: 'q2s2', type: 'sprint',  name: 'Q2S2', roles: [], events: [] },
+  { id: 'q2s3', type: 'sprint',  name: 'Q2S3', roles: [], events: [] },
+  { id: 'q2s4', type: 'sprint',  name: 'Q2S4', roles: [], events: [] },
+  { id: 'q2s5', type: 'sprint',  name: 'Q2S5', roles: [], events: [] },
+  { id: 'q2s6', type: 'sprint',  name: 'Q2S6', roles: [], events: [] },
 
-      { id: 'q3',   type: 'quarter', name: 'Q3', roles: [], events: [] },
-      { id: 'q3s1', type: 'sprint',  name: 'Q3S1', roles: [], events: [] },
-      { id: 'q3s2', type: 'sprint',  name: 'Q3S2', roles: [], events: [] },
-      { id: 'q3s3', type: 'sprint',  name: 'Q3S3', roles: [], events: [] },
-      { id: 'q3s4', type: 'sprint',  name: 'Q3S4', roles: [], events: [] },
-      { id: 'q3s5', type: 'sprint',  name: 'Q3S5', roles: [], events: [] },
-      { id: 'q3s6', type: 'sprint',  name: 'Q3S6', roles: [], events: [] },
+  { id: 'q3',   type: 'quarter', name: 'Q3', roles: [], events: [] },
+  { id: 'q3s1', type: 'sprint',  name: 'Q3S1', roles: [], events: [] },
+  { id: 'q3s2', type: 'sprint',  name: 'Q3S2', roles: [], events: [] },
+  { id: 'q3s3', type: 'sprint',  name: 'Q3S3', roles: [], events: [] },
+  { id: 'q3s4', type: 'sprint',  name: 'Q3S4', roles: [], events: [] },
+  { id: 'q3s5', type: 'sprint',  name: 'Q3S5', roles: [], events: [] },
+  { id: 'q3s6', type: 'sprint',  name: 'Q3S6', roles: [], events: [] },
 
-      { id: 'q4',   type: 'quarter', name: 'Q4', roles: [], events: [] },
-      { id: 'q4s1', type: 'sprint',  name: 'Q4S1', roles: [], events: [] },
-      { id: 'q4s2', type: 'sprint',  name: 'Q4S2', roles: [], events: [] },
-      { id: 'q4s3', type: 'sprint',  name: 'Q4S3', roles: [], events: [] },
-      { id: 'q4s4', type: 'sprint',  name: 'Q4S4', roles: [], events: [] },
-      { id: 'q4s5', type: 'sprint',  name: 'Q4S5', roles: [], events: [] },
-      { id: 'q4s6', type: 'sprint',  name: 'Q4S6', roles: [], events: [] },
-    ];
+  { id: 'q4',   type: 'quarter', name: 'Q4', roles: [], events: [] },
+  { id: 'q4s1', type: 'sprint',  name: 'Q4S1', roles: [], events: [] },
+  { id: 'q4s2', type: 'sprint',  name: 'Q4S2', roles: [], events: [] },
+  { id: 'q4s3', type: 'sprint',  name: 'Q4S3', roles: [], events: [] },
+  { id: 'q4s4', type: 'sprint',  name: 'Q4S4', roles: [], events: [] },
+  { id: 'q4s5', type: 'sprint',  name: 'Q4S5', roles: [], events: [] },
+  { id: 'q4s6', type: 'sprint',  name: 'Q4S6', roles: [], events: [] },
+];
 
-    function TPSReportsApp() {
-      const [lineItems, setLineItems] = useState(initialLineItems);
-      const [roles, setRoles] = useState([]);
-      const [events, setEvents] = useState([]);
+/**
+ * Helper: find all sprint indices if user clicks "year", or a quarter, or a single sprint.
+ */
+function getSprintIndices(itemIndex) {
+  const item = lineItems[itemIndex];
+  if (item.type === 'year') {
+    // all sprints => 2..28
+    return Array.from({ length: 27 }, (_, i) => i+2); 
+  } else if (item.type === 'quarter') {
+    // gather next sprints until next quarter or end
+    return gatherQuarterSprints(itemIndex);
+  } else {
+    // single sprint => just that index
+    return [itemIndex];
+  }
+}
+function gatherQuarterSprints(qIndex) {
+  let out = [];
+  let i = qIndex+1;
+  while (i<lineItems.length && lineItems[i].type==='sprint') {
+    out.push(i);
+    i++;
+  }
+  return out;
+}
 
-      // For the report
-      const [reportTargetId, setReportTargetId] = useState(null);
+function TPSReportsApp() {
+  const [items, setItems] = React.useState(lineItems);
+  const [roles, setRoles] = React.useState([]);
+  const [events, setEvents] = React.useState([]);
+  const [reportTargetId, setReportTargetId] = React.useState(null);
 
-      // Creates new role or event
-      const handleAddNewItem = () => {
-        const itemType = prompt('Add "role" or "event"?');
-        if (!itemType) return;
+  /**
+   * Create a new role or event.
+   */
+  function handleAddNewItem() {
+    const kind = prompt('Add "role" or "event"?');
+    if (!kind) return;
 
-        if (itemType.toLowerCase() === 'role') {
-          const name = prompt('Role name?');
-          const fteOrContract = prompt('FTE? (yes/no)');
-          const salary = prompt('Yearly salary?');
-          const pointsWeek = prompt('Points delivered per week?');
-          const specialty = prompt('Specialty? (e.g. UI, backend, etc.)');
+    if (kind.toLowerCase()==='role') {
+      const name = prompt('Role name?');
+      const fte = prompt('Is this FTE? (yes/no)');
+      const salaryStr = prompt('Yearly Salary?');
+      const pointsStr = prompt('Points delivered per week?');
+      const specialty = prompt('Specialty? e.g. "UI"');
+      const rampStr = prompt('How many sprints to ramp up? (0..6)');
 
-          const newRole = {
-            id: 'role-' + Date.now(),
-            name: name || 'Untitled Role',
-            fte: (fteOrContract?.toLowerCase() === 'yes'),
-            overheadMultiplier: (fteOrContract?.toLowerCase() === 'yes') ? 1.17 : 1,
-            salary: Number(salary) || 0,
-            pointsPerWeek: Number(pointsWeek) || 0,
-            specialty: specialty || 'generalist',
-          };
-          setRoles([...roles, newRole]);
-
-        } else if (itemType.toLowerCase() === 'event') {
-          const name = prompt('Event name?');
-          const impact = prompt('Impact to shift points? (positive/negative #)');
-          const repeat = prompt('Repeat forever? (yes/no)');
-
-          const newEvent = {
-            id: 'event-' + Date.now(),
-            name: name || 'Untitled Event',
-            impactPoints: Number(impact) || 0,
-            repeatForever: (repeat?.toLowerCase() === 'yes'),
-          };
-          setEvents([...events, newEvent]);
-
-        } else {
-          alert('Invalid type. Please try again.');
+      let isFte = (fte?.toLowerCase()==='yes');
+      let contractLen=null;
+      if (!isFte) {
+        const cStr = prompt('How many total sprints for this contract?');
+        if (cStr) {
+          const cNum = parseInt(cStr,10);
+          if (!isNaN(cNum) && cNum>0) contractLen=cNum;
         }
-      };
-
-      // Instead of drag & drop, we do "click to assign"
-      // We also allow multiple clones of the same role or event
-      const handleRoleClick = (role) => {
-        // 1. How many clones to add?
-        const qtyStr = prompt(`How many of "${role.name}" do you want to add?`, "1");
-        if (!qtyStr) return;
-        const qty = parseInt(qtyStr, 10);
-        if (isNaN(qty) || qty <= 0) return alert('Invalid number');
-
-        // 2. Which line item to add it from?
-        const target = prompt(
-          `Which line item to assign these ${qty} instance(s) of "${role.name}"?\n(e.g., "q2s3" or "year-2025")\nThey will also propagate to subsequent line items.`
-        );
-        if (!target) return;
-
-        // 3. Find the index of that line item
-        const idx = lineItems.findIndex((li) => li.id === target);
-        if (idx < 0) {
-          alert('No such line item found.');
-          return;
-        }
-
-        // 4. Insert the role ID multiple times into that item & all subsequent items
-        // We'll treat it like a list of "role IDs" so we can have duplicates
-        setLineItems((prev) => {
-          const newItems = [...prev];
-          for (let i = idx; i < newItems.length; i++) {
-            const li = newItems[i];
-            const newRoleIDs = [...li.roles];
-            // add duplicates
-            for (let c = 0; c < qty; c++) {
-              newRoleIDs.push(role.id);
-            }
-            newItems[i] = { ...li, roles: newRoleIDs };
-          }
-          return newItems;
-        });
-      };
-
-      const handleEventClick = (ev) => {
-        // 1. How many clones to add?
-        const qtyStr = prompt(`How many of "${ev.name}" do you want to add?`, "1");
-        if (!qtyStr) return;
-        const qty = parseInt(qtyStr, 10);
-        if (isNaN(qty) || qty <= 0) return alert('Invalid number');
-
-        // 2. Which line item?
-        const target = prompt(
-          `Which line item to assign these ${qty} instance(s) of "${ev.name}"?\n(e.g., "q2s3" or "year-2025")\nThey will also propagate to subsequent line items.`
-        );
-        if (!target) return;
-
-        const idx = lineItems.findIndex((li) => li.id === target);
-        if (idx < 0) {
-          alert('No such line item found.');
-          return;
-        }
-
-        // 3. Add duplicates to that item & all subsequent items
-        setLineItems((prev) => {
-          const newItems = [...prev];
-          for (let i = idx; i < newItems.length; i++) {
-            const li = newItems[i];
-            const newEventIDs = [...li.events];
-            for (let c = 0; c < qty; c++) {
-              newEventIDs.push(ev.id);
-            }
-            newItems[i] = { ...li, events: newEventIDs };
-          }
-          return newItems;
-        });
-      };
-
-      // Clicking a line item => generate a report
-      const handleGenerateReport = (lineItemId) => {
-        setReportTargetId(lineItemId);
-      };
-
-      // The cost/points logic
-      function getSprintCountForType(itemType) {
-        if (itemType === 'year') return 26;    // 52 weeks => 26 sprints
-        if (itemType === 'quarter') return 6;  // 12 weeks => 6 sprints
-        if (itemType === 'sprint') return 1;   // 2 weeks => 1 sprint
-        return 0;
       }
 
-      const renderReport = () => {
-        if (!reportTargetId) return null;
-        const target = lineItems.find((li) => li.id === reportTargetId);
-        if (!target) return null;
-
-        const sprintCount = getSprintCountForType(target.type);
-
-        // Each line item has an array of role IDs and an array of event IDs
-        // We now might have multiple duplicates in roles[], so we must calculate cost/points
-        // for each item in roles[] individually (because we allow clones).
-        // Example: [ 'role-123', 'role-123' ] => that means we have 2 instances of the same role.
-
-        // Build an array of {roleObj} for each ID
-        const usedRoles = target.roles.map((roleId) => {
-          return roles.find((r) => r.id === roleId);
-        }).filter(Boolean);  // remove any that might not exist
-
-        const usedEvents = target.events.map((eventId) => {
-          return events.find((e) => e.id === eventId);
-        }).filter(Boolean);
-
-        let totalCost = 0;
-        let totalPoints = 0;
-        let breakdownBySpecialty = {};
-
-        // For each role instance
-        usedRoles.forEach((roleObj) => {
-          const overheadSalary = roleObj.salary * roleObj.overheadMultiplier;
-          const fraction = sprintCount / 26; // fraction of the year
-          const cost = overheadSalary * fraction;
-          const points = roleObj.pointsPerWeek * 2 * sprintCount;
-
-          totalCost += cost;
-          totalPoints += points;
-
-          if (!breakdownBySpecialty[roleObj.specialty]) {
-            breakdownBySpecialty[roleObj.specialty] = { cost: 0, points: 0 };
-          }
-          breakdownBySpecialty[roleObj.specialty].cost += cost;
-          breakdownBySpecialty[roleObj.specialty].points += points;
-        });
-
-        usedEvents.forEach((evObj) => {
-          totalPoints += evObj.impactPoints * sprintCount;
-        });
-
-        const totalBoulders = totalPoints / 40;
-        const costPerPoint = totalPoints > 0 ? totalCost / totalPoints : 0;
-
-        return (
-          <div className="report">
-            <h2>Report for {target.name} ({target.type})</h2>
-            <p><strong>Total Cost:</strong> ${Math.round(totalCost).toLocaleString()}</p>
-            <p><strong>Total Points:</strong> {Math.round(totalPoints)}</p>
-            <p><strong>Boulders (40 pts each):</strong> {totalBoulders.toFixed(2)}</p>
-            <p><strong>Cost per Point:</strong> ${costPerPoint.toFixed(2)}</p>
-
-            <h3>By Specialty</h3>
-            {Object.keys(breakdownBySpecialty).map((spec) => {
-              const data = breakdownBySpecialty[spec];
-              const costPerSpecPoint = data.points > 0 ? data.cost / data.points : 0;
-              return (
-                <div key={spec}>
-                  <strong>{spec}:</strong> ${costPerSpecPoint.toFixed(2)} per point
-                </div>
-              );
-            })}
-
-            {/* Roles + duplicates */}
-            <h3>Role Instances Assigned</h3>
-            <ul>
-              {usedRoles.map((r, idx) => (
-                <li key={idx}>
-                  {r.name} ({r.specialty}) 
-                  — Salary: ${r.salary.toLocaleString()}
-                  {r.fte ? ' (FTE)' : ' (Contract)'}
-                </li>
-              ))}
-            </ul>
-
-            {/* Events + duplicates */}
-            <h3>Event Instances Assigned</h3>
-            <ul>
-              {usedEvents.map((ev, idx) => (
-                <li key={idx}>
-                  {ev.name} (Impact: {ev.impactPoints}, Repeat: {ev.repeatForever ? 'Yes' : 'No'})
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
+      const newRole={
+        id: 'role-'+Date.now(),
+        name: name||'Untitled Role',
+        fte: isFte,
+        overheadMultiplier: isFte?1.17:1,
+        salary: Number(salaryStr)||0,
+        pointsPerWeek: Number(pointsStr)||0,
+        specialty: specialty||'generalist',
+        rampUpSprints: parseInt(rampStr,10)||0,
+        contractSprints: contractLen, // if null => unlimited
       };
+      setRoles(prev=> [...prev, newRole]);
 
-      // Rendering line items on the left
-      const renderLineItem = (item) => {
-        // We might have duplicates in item.roles, so let's just show the first letter for each
-        // e.g. if we have 2 identical role IDs, we show letter "F" "F" if the name starts with "F"
-        const roleLetters = item.roles.map((rid, idx) => {
-          const found = roles.find((r) => r.id === rid);
-          const letter = found ? found.name.charAt(0).toUpperCase() : '?';
-          return <span key={`${rid}-${idx}`}>{letter}</span>;
-        });
-        const eventLetters = item.events.map((eid, idx) => {
-          const found = events.find((e) => e.id === eid);
-          const letter = found ? found.name.charAt(0).toUpperCase() : '?';
-          return <span key={`${eid}-${idx}`}>{letter}</span>;
-        });
-        const combinedAssignments = [...roleLetters, ...eventLetters];
-
-        // For CSS
-        const typeClass = item.type === 'year'
-          ? 'year'
-          : item.type === 'quarter'
-          ? 'quarter'
-          : 'sprint';
-
-        return (
-          <div
-            key={item.id}
-            className={`list-item ${typeClass}`}
-            onClick={() => handleGenerateReport(item.id)}
-          >
-            <span>{item.name}</span>
-            {combinedAssignments.length > 0 && (
-              <div className="assignments">
-                {combinedAssignments}
-              </div>
-            )}
-          </div>
-        );
+    } else if (kind.toLowerCase()==='event') {
+      const name = prompt('Event name?');
+      const impact = prompt('Impact to shift points? (positive/negative)?');
+      const repeat = prompt('Repeat forever? (yes/no)');
+      const newEvent={
+        id: 'event-'+Date.now(),
+        name: name||'Untitled Event',
+        impactPoints: Number(impact)||0,
+        repeatForever: (repeat?.toLowerCase()==='yes'),
       };
+      setEvents(prev=>[...prev,newEvent]);
 
-      return (
-        <div className="container">
-          {/* LEFT PANEL: LIST ITEMS */}
-          <div className="left-panel">
-            {lineItems.map(renderLineItem)}
-          </div>
+    } else {
+      alert('Invalid type.');
+    }
+  }
 
-          {/* RIGHT PANEL: ROSTER + REPORT */}
-          <div className="right-panel">
-            <div className="roster">
-              <div className="roster-header">
-                <h3>Roster</h3>
-                <button onClick={handleAddNewItem}>+</button>
-              </div>
-              <div className="roster-items">
-                <h4>Roles</h4>
-                {roles.map((role) => (
-                  <div
-                    key={role.id}
-                    className="roster-item"
-                    onClick={() => handleRoleClick(role)}
-                  >
-                    {role.name} ({role.specialty})
-                  </div>
-                ))}
-
-                <h4>Events</h4>
-                {events.map((ev) => (
-                  <div
-                    key={ev.id}
-                    className="roster-item"
-                    onClick={() => handleEventClick(ev)}
-                  >
-                    {ev.name} (Impact: {ev.impactPoints})
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="report-section">
-              {renderReport()}
-            </div>
-          </div>
-        </div>
-      );
+  /**
+   * Add a role (could be FTE or contract) from chosen line item onward.
+   * If contract => only up to contractSprints sprints.
+   * Mark each line item whether it's ramping or not, based on usageSoFar < rampUpSprints.
+   */
+  function handleRoleClick(role) {
+    const qtyStr = prompt(`How many of "${role.name}" do you want to add?`, '1');
+    if (!qtyStr) return;
+    const qty = parseInt(qtyStr,10);
+    if (isNaN(qty) || qty<=0) {
+      alert('Invalid #');
+      return;
     }
 
-    // Render app
-    const rootEl = document.getElementById('root');
-    ReactDOM.createRoot(rootEl).render(<TPSReportsApp />);
-  </script>
+    const tgt = prompt('Which line item to start on? (e.g. "q3s4" or "year-2025")');
+    if (!tgt) return;
+    const startIndex= items.findIndex(x=> x.id===tgt);
+    if (startIndex<0){
+      alert('No such line item');
+      return;
+    }
+
+    // We'll do usageSoFar for each of the "qty" clones, so each clone has its own usage count.
+    // That might be overkill if you want them all the same usage, but let's do it anyway for correctness.
+    // Minimal approach: we do a for-loop from 0..(qty-1) => each clone has usageSoFar=0, then we walk line items from startIndex onward. 
+    // If contract => we only do up to contractSprints sprints. 
+    // Each time we add them to a line item, we check usageSoFar < rampUp => isRamping=true else false, usageSoFar++.
+    const newArr = [...items];
+
+    for (let c=0; c<qty; c++){
+      let usageSoFar=0; 
+      let sCount= role.fte? Infinity : (role.contractSprints||0); // Infinity if FTE
+      let lineCount=0; // how many lines we've assigned so far
+
+      for (let i=startIndex; i<newArr.length; i++){
+        const lineItem=newArr[i];
+        // skip if not a "sprint"
+        if (lineItem.type!=='sprint' && lineItem.type!=='year' && lineItem.type!=='quarter') {
+          continue;
+        }
+        if (!role.fte) {
+          // if contract => stop if lineCount >= sCount
+          if (lineCount>= sCount) break;
+        }
+        const isRamping= (usageSoFar<role.rampUpSprints);
+
+        // add to roles array
+        const newRoleObj={
+          roleId: role.id,
+          isRamping,
+        };
+        // push
+        const oldRoles=[...lineItem.roles];
+        oldRoles.push(newRoleObj);
+        newArr[i]={ ...lineItem, roles: oldRoles };
+
+        usageSoFar++;
+        lineCount++;
+      }
+    }
+
+    setItems(newArr);
+  }
+
+  /**
+   * Add an event from line item onward (repeatForever is not fully used here, but let's ignore).
+   */
+  function handleEventClick(ev) {
+    const qtyStr=prompt(`How many of "${ev.name}" to add?`,'1');
+    if (!qtyStr) return;
+    const qty=parseInt(qtyStr,10);
+    if (isNaN(qty)||qty<=0) {
+      alert('Invalid #');
+      return;
+    }
+
+    const tgt=prompt('Which line item to start on?');
+    if (!tgt) return;
+    const startIndex= items.findIndex(x=> x.id===tgt);
+    if (startIndex<0){
+      alert('No such line item');
+      return;
+    }
+
+    const newArr=[...items];
+    for (let c=0; c<qty; c++){
+      for (let i=startIndex; i<newArr.length; i++){
+        const lineItem=newArr[i];
+        // skip if not sprint/year/quarter
+        if (lineItem.type!=='sprint' && lineItem.type!=='year' && lineItem.type!=='quarter') continue;
+
+        const oldE=[...lineItem.events];
+        oldE.push({ eventId: ev.id });
+        newArr[i]={ ...lineItem, events: oldE };
+      }
+    }
+
+    setItems(newArr);
+  }
+
+  function handleGenerateReport(itemId) {
+    setReportTargetId(itemId);
+  }
+
+  /**
+   * For the aggregator:
+   * We'll gather the sprints that item covers, sum up cost/points, respecting `isRamping` for each role in each sprint. 
+   * cost => (role.salary*role.overhead)/26
+   * if isRamping => half points => role.pointsPerWeek*2 *0.5
+   * else => full
+   */
+  function renderReport() {
+    if (!reportTargetId) return null;
+    const idx= items.findIndex(x=> x.id===reportTargetId);
+    if (idx<0) return null;
+
+    const item= items[idx];
+    const sprintIndices= getSprintIndices(idx);
+
+    let totalCost=0, totalPoints=0;
+    let breakdownBySpecialty={};
+    let usedRoles=[];
+    let usedEvents=[];
+
+    sprintIndices.forEach((si)=>{
+      const sItem= items[si];
+      // roles
+      sItem.roles.forEach((rObj)=>{
+        const rData= roles.find(rr=> rr.id===rObj.roleId);
+        if (!rData) return;
+
+        // cost
+        const overhead = rData.salary*rData.overheadMultiplier;
+        const costPerSprint = overhead / YEAR_SPRINTS;
+        totalCost += costPerSprint;
+
+        // points
+        const weeklyPts= rData.pointsPerWeek*SPRINT_WEEKS;
+        const finalPts = rObj.isRamping? (weeklyPts*0.5) : weeklyPts;
+        totalPoints+= finalPts;
+
+        // track specialty
+        if (!breakdownBySpecialty[rData.specialty]){
+          breakdownBySpecialty[rData.specialty]={ cost:0, points:0 };
+        }
+        breakdownBySpecialty[rData.specialty].cost+= costPerSprint;
+        breakdownBySpecialty[rData.specialty].points+= finalPts;
+
+        usedRoles.push({ rData, isRamping: rObj.isRamping });
+      });
+      // events
+      sItem.events.forEach((eObj)=>{
+        const eData= events.find(ee=> ee.id=== eObj.eventId);
+        if (!eData) return;
+        totalPoints+= eData.impactPoints;
+        usedEvents.push(eData);
+      });
+    });
+
+    // distinct
+    let distinctRoles=[];
+    const seenR= new Set();
+    usedRoles.forEach(ur=>{
+      if (!seenR.has(ur.rData.id)) {
+        distinctRoles.push(ur);
+        seenR.add(ur.rData.id);
+      }
+    });
+    const distinctEvents= Array.from(new Set(usedEvents));
+
+    const totalBoulders= totalPoints/40;
+    const costPerPoint= (totalPoints>0)?(totalCost/ totalPoints):0;
+
+    // if a role had ANY ramping => star
+    const rampedRoleIds = new Set( usedRoles.filter(u=> u.isRamping).map(u=> u.rData.id) );
+
+    return (
+      <div className="report">
+        <h2>Report for {item.name} ({item.type})</h2>
+        <p><strong>Sprints in scope:</strong> {sprintIndices.length}</p>
+        <p><strong>Total Cost:</strong> ${Math.round(totalCost).toLocaleString()}</p>
+        <p><strong>Total Points:</strong> {Math.round(totalPoints)}</p>
+        <p><strong>Boulders (40 pts):</strong> {totalBoulders.toFixed(2)}</p>
+        <p><strong>Cost per Point:</strong> ${costPerPoint.toFixed(2)}</p>
+
+        <h3>By Specialty</h3>
+        {Object.keys(breakdownBySpecialty).map((spec)=>{
+          const data= breakdownBySpecialty[spec];
+          const cPerP= (data.points>0)?(data.cost/data.points):0;
+          return (
+            <div key={spec}>
+              <strong>{spec}:</strong> ${cPerP.toFixed(2)} / point
+            </div>
+          );
+        })}
+
+        <h3>Roles in scope</h3>
+        <ul>
+          {distinctRoles.map((ur)=>{
+            const star= rampedRoleIds.has(ur.rData.id)? '*':'';
+            return (
+              <li key={ur.rData.id}>
+                {ur.rData.name}{star} ({ur.rData.specialty}) 
+                - Salary: ${ur.rData.salary.toLocaleString()}
+                {ur.rData.fte? ' (FTE)': ` (Contract: up to ${ur.rData.contractSprints} sprints)`}
+                , rampUp={ur.rData.rampUpSprints} 
+              </li>
+            );
+          })}
+        </ul>
+
+        <h3>Events in scope</h3>
+        <ul>
+          {distinctEvents.map(e=> (
+            <li key={e.id}>{e.name} (impact={e.impactPoints})</li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  /**
+   * Rendering the left panel: each line item => show role letters, but if isRamping => letter+*
+   */
+  function renderLineItem(li, idx) {
+    let cssClass='sprint';
+    if (li.type==='year') cssClass='year';
+    else if (li.type==='quarter') cssClass='quarter';
+
+    // gather a small set of { letter, isRamping } for each role
+    const roleIcons= li.roles.map((ro, i2)=>{
+      const rData= roles.find(rr=> rr.id=== ro.roleId);
+      if (!rData) return null;
+      const letter=rData.name.charAt(0).toUpperCase();
+      return (
+        <span key={'r'+i2}>
+          {letter}
+          {ro.isRamping && <span className="ramp">*</span>}
+        </span>
+      );
+    }).filter(Boolean);
+
+    const eventIcons= li.events.map((eo,i2)=>{
+      const eData= events.find(e=> e.id===eo.eventId);
+      if (!eData) return null;
+      const letter= eData.name.charAt(0).toUpperCase();
+      return (<span key={'e'+i2}>{letter}</span>);
+    }).filter(Boolean);
+
+    const combined=[...roleIcons, ...eventIcons];
+
+    return (
+      <div 
+        key={li.id}
+        className={`list-item ${cssClass}`}
+        onClick={()=> handleGenerateReport(li.id)}
+      >
+        {li.name}
+        {combined.length>0 && (
+          <div className="assignments">
+            {combined}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="container">
+      <div className="left-panel">
+        {items.map((li, idx)=> renderLineItem(li, idx))}
+      </div>
+      <div className="right-panel">
+        <div className="roster">
+          <div className="roster-header">
+            <h3>Roster</h3>
+            <button onClick={handleAddNewItem}>+</button>
+          </div>
+          <div className="roster-items">
+            <h4>Roles</h4>
+            {roles.map(r=> (
+              <div 
+                key={r.id}
+                className="roster-item"
+                onClick={()=> handleRoleClick(r)}
+              >
+                {r.name} {r.fte? '(FTE)':'(Contract)'} rampUp={r.rampUpSprints}
+              </div>
+            ))}
+            <h4>Events</h4>
+            {events.map(e=>(
+              <div
+                key={e.id}
+                className="roster-item"
+                onClick={()=> handleEventClick(e)}
+              >
+                {e.name} (impact={e.impactPoints})
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="report-section">
+          {renderReport()}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<TPSReportsApp />);
+</script>
 </body>
 </html>
