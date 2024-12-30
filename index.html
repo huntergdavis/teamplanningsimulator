@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TPS Reports - Client-Only</title>
+  <!-- 
+    React (production) and Babel (for live JSX transform) from UNPKG CDN.
+    We import React/ReactDOM first, then Babel, then our script using type="text/babel".
+  -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+
+  <!-- Basic styling in one block -->
+  <style>
+    /* Container for the entire app */
+    .tps-container {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      grid-template-rows: auto;
+      height: 100vh;
+      overflow: hidden;
+      font-family: sans-serif;
+      color: #333;
+    }
+
+    /* Left side: Timeline */
+    .timeline {
+      padding: 1rem;
+      background-color: #f3f4f6;
+      overflow-y: auto;
+    }
+    .bubble {
+      display: inline-block;
+      margin: 0.5rem;
+      padding: 0.75rem 1rem;
+      border-radius: 50px;
+      background: #3182ce;
+      color: #fff;
+      cursor: pointer;
+      text-align: center;
+      user-select: none;
+    }
+    .year-bubble {
+      background: #2c5282;
+    }
+    .quarter-bubble {
+      background: #2b6cb0;
+    }
+    .sprint-bubble {
+      background: #4299e1;
+    }
+    .quarter-block {
+      margin-top: 2rem;
+    }
+    .sprints-row {
+      display: flex;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+
+    /* Right side: Roster */
+    .roster {
+      border-left: 2px solid #ddd;
+      padding: 1rem;
+      overflow-y: auto;
+      background: #fff;
+    }
+    .roster-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .roster-header h3 {
+      margin: 0;
+    }
+    .roster-header button {
+      padding: 0.4rem 0.8rem;
+      font-size: 1rem;
+      background: #3182ce;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .roster-items {
+      margin-top: 1rem;
+    }
+    .draggable-item {
+      margin: 0.25rem 0;
+      padding: 0.5rem;
+      background: #edf2f7;
+      border-radius: 4px;
+      cursor: grab;
+      user-select: none;
+    }
+    .draggable-item:hover {
+      background: #e2e8f0;
+    }
+
+    /* Bottom: Report Section */
+    .report-section {
+      grid-column: 1 / span 2;
+      background: #fff;
+      padding: 1rem;
+      overflow-y: auto;
+      border-top: 2px solid #ddd;
+    }
+    .report {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid #ccc;
+    }
+    .report h2 {
+      margin-top: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root"></div>
+  
+  <!-- Main JSX Code -->
+  <script type="text/babel">
+    const { useState } = React;
+
+    function TPSReports() {
+      // -------------------------------------------
+      // State for roles, events
+      // -------------------------------------------
+      const [roles, setRoles] = useState([]);
+      const [events, setEvents] = useState([]);
+
+      // The year: 2025 with 4 quarters, each quarter has 6 sprints.
+      // All client-side, no server
+      const [yearStructure, setYearStructure] = useState({
+        id: '2025',
+        quarters: [
+          {
+            id: 'Q1',
+            sprints: [
+              { id: 'Q1S1', roles: [], events: [] },
+              { id: 'Q1S2', roles: [], events: [] },
+              { id: 'Q1S3', roles: [], events: [] },
+              { id: 'Q1S4', roles: [], events: [] },
+              { id: 'Q1S5', roles: [], events: [] },
+              { id: 'Q1S6', roles: [], events: [] },
+            ],
+          },
+          {
+            id: 'Q2',
+            sprints: [
+              { id: 'Q2S1', roles: [], events: [] },
+              { id: 'Q2S2', roles: [], events: [] },
+              { id: 'Q2S3', roles: [], events: [] },
+              { id: 'Q2S4', roles: [], events: [] },
+              { id: 'Q2S5', roles: [], events: [] },
+              { id: 'Q2S6', roles: [], events: [] },
+            ],
+          },
+          {
+            id: 'Q3',
+            sprints: [
+              { id: 'Q3S1', roles: [], events: [] },
+              { id: 'Q3S2', roles: [], events: [] },
+              { id: 'Q3S3', roles: [], events: [] },
+              { id: 'Q3S4', roles: [], events: [] },
+              { id: 'Q3S5', roles: [], events: [] },
+              { id: 'Q3S6', roles: [], events: [] },
+            ],
+          },
+          {
+            id: 'Q4',
+            sprints: [
+              { id: 'Q4S1', roles: [], events: [] },
+              { id: 'Q4S2', roles: [], events: [] },
+              { id: 'Q4S3', roles: [], events: [] },
+              { id: 'Q4S4', roles: [], events: [] },
+              { id: 'Q4S5', roles: [], events: [] },
+              { id: 'Q4S6', roles: [], events: [] },
+            ],
+          },
+        ],
+      });
+
+      // Drag-and-drop states
+      const [draggedItem, setDraggedItem] = useState(null);
+      const [draggedType, setDraggedType] = useState(null); // "role" or "event"
+
+      // Which period (year, quarter, or sprint) are we reporting on?
+      const [reportPeriod, setReportPeriod] = useState(null);
+
+      // -------------------------------------------
+      // Creating new Roles or Events
+      // -------------------------------------------
+      const handleAddNewItem = () => {
+        const itemType = prompt('Add "role" or "event"? (Type exactly: "role" or "event")');
+        if (itemType === 'role') {
+          const name = prompt('Name of role?');
+          const fteOrContract = prompt('FTE? (yes/no)');
+          const length = prompt('Length of employment (weeks) or "unlimited"?');
+          const salary = prompt('Yearly Salary (number)?');
+          const hoursWeek = prompt('Hours worked per week (number)?');
+          const pointsWeek = prompt('Points delivered per week (number)?');
+          const specialty = prompt('Specialty? (e.g. backend, UI, etc.)');
+          const rampUpTime = prompt('Time to ramp up in weeks?');
+
+          const newRole = {
+            id: 'role-' + Date.now(),
+            name: name || 'Untitled Role',
+            fte: fteOrContract?.toLowerCase() === 'yes',
+            overheadMultiplier: fteOrContract?.toLowerCase() === 'yes' ? 1.17 : 1,
+            lengthOfEmployment: length || 'unlimited',
+            salary: Number(salary) || 0,
+            hoursPerWeek: Number(hoursWeek) || 0,
+            pointsPerWeek: Number(pointsWeek) || 0,
+            specialty: specialty || 'generalist',
+            rampUpTime: Number(rampUpTime) || 0,
+          };
+          setRoles((prev) => [...prev, newRole]);
+        } else if (itemType === 'event') {
+          const name = prompt('Name of event?');
+          const impact = prompt('Impact to shift points (enter + or - followed by a number)?');
+          const repeat = prompt('Repeat forever? (yes/no)');
+
+          const newEvent = {
+            id: 'event-' + Date.now(),
+            name: name || 'Untitled Event',
+            impactPoints: Number(impact) || 0,
+            repeatForever: repeat?.toLowerCase() === 'yes',
+          };
+          setEvents((prev) => [...prev, newEvent]);
+        } else {
+          alert('Invalid selection. Please type "role" or "event".');
+        }
+      };
+
+      // -------------------------------------------
+      // Drag handlers
+      // -------------------------------------------
+      const handleDragStart = (item, type) => {
+        setDraggedItem(item);
+        setDraggedType(type);
+      };
+
+      const handleDropOnSprint = (sprintId, quarterId) => {
+        if (!draggedItem) return;
+
+        setYearStructure((prevYear) => {
+          const updatedQuarters = prevYear.quarters.map((q) => {
+            if (q.id !== quarterId) return q; // no change
+
+            const updatedSprints = q.sprints.map((s) => {
+              if (s.id !== sprintId) return s; // no change
+
+              if (draggedType === 'role') {
+                return {
+                  ...s,
+                  roles: [...s.roles, draggedItem.id],
+                };
+              } else if (draggedType === 'event') {
+                return {
+                  ...s,
+                  events: [...s.events, draggedItem.id],
+                };
+              }
+              return s;
+            });
+
+            return { ...q, sprints: updatedSprints };
+          });
+          return { ...prevYear, quarters: updatedQuarters };
+        });
+
+        setDraggedItem(null);
+        setDraggedType(null);
+      };
+
+      // -------------------------------------------
+      // Click to Generate Report
+      // -------------------------------------------
+      const handleGenerateReport = (periodId) => {
+        setReportPeriod(periodId);
+      };
+
+      const renderReport = () => {
+        if (!reportPeriod) return null;
+
+        // Find relevant sprints
+        let relevantSprints = [];
+        if (reportPeriod === '2025') {
+          // Entire year
+          yearStructure.quarters.forEach((q) => {
+            relevantSprints = [...relevantSprints, ...q.sprints];
+          });
+        } else if (reportPeriod.startsWith('Q')) {
+          // Single quarter
+          const quarter = yearStructure.quarters.find((q) => q.id === reportPeriod);
+          if (quarter) {
+            relevantSprints = quarter.sprints;
+          }
+        } else {
+          // Single sprint
+          yearStructure.quarters.forEach((q) => {
+            const found = q.sprints.find((s) => s.id === reportPeriod);
+            if (found) relevantSprints.push(found);
+          });
+        }
+
+        // Gather all unique role IDs and event IDs
+        const roleIds = new Set();
+        const eventIds = new Set();
+        relevantSprints.forEach((s) => {
+          s.roles.forEach((rId) => roleIds.add(rId));
+          s.events.forEach((eId) => eventIds.add(eId));
+        });
+
+        const usedRoles = roles.filter((r) => roleIds.has(r.id));
+        const usedEvents = events.filter((e) => eventIds.has(e.id));
+
+        // Calculate total cost, total points, etc.
+        let totalCost = 0;
+        let totalPoints = 0;
+        let breakdownBySpecialty = {};
+
+        usedRoles.forEach((r) => {
+          // Overhead cost for FTE
+          const overheadSalary = r.salary * r.overheadMultiplier;
+
+          // For a more accurate approach, you'd figure out how many sprints/weeks 
+          // they actually appear in, factor in ramp-up, partial usage, etc.
+          // We'll do a simplified approach: each sprint = 2 weeks of cost and points.
+
+          const costPerSprint = overheadSalary / 26; // 26 two-week sprints in a year
+          const pointsPerSprint = r.pointsPerWeek * 2; // 2 weeks
+
+          // Count how many sprints they appear in for the chosen period
+          const countSprintsUsed = relevantSprints.filter((s) => s.roles.includes(r.id)).length;
+
+          const totalRoleCost = costPerSprint * countSprintsUsed;
+          const totalRolePoints = pointsPerSprint * countSprintsUsed;
+
+          totalCost += totalRoleCost;
+          totalPoints += totalRolePoints;
+
+          // By specialty
+          if (!breakdownBySpecialty[r.specialty]) {
+            breakdownBySpecialty[r.specialty] = { cost: 0, points: 0 };
+          }
+          breakdownBySpecialty[r.specialty].cost += totalRoleCost;
+          breakdownBySpecialty[r.specialty].points += totalRolePoints;
+        });
+
+        // Factor in Events
+        usedEvents.forEach((ev) => {
+          // If an event is repeated forever, you might apply it to every sprint in the year,
+          // but here we only count sprints where it’s explicitly dropped.
+          const countSprintsUsed = relevantSprints.filter((s) => s.events.includes(ev.id)).length;
+          totalPoints += ev.impactPoints * countSprintsUsed;
+        });
+
+        // Boulders
+        const totalBoulders = totalPoints / 40;
+        const costPerPoint = totalPoints > 0 ? totalCost / totalPoints : 0;
+
+        return (
+          <div className="report">
+            <h2>Report for {reportPeriod}</h2>
+            <p>
+              <strong>Total Cost:</strong> ${Math.round(totalCost).toLocaleString()}
+            </p>
+            <p>
+              <strong>Total Points:</strong> {Math.round(totalPoints)}
+            </p>
+            <p>
+              <strong>Boulders (40 pts each):</strong> {totalBoulders.toFixed(2)}
+            </p>
+            <p>
+              <strong>Cost per Point (efficiency):</strong> $
+              {costPerPoint.toFixed(2)}
+            </p>
+
+            <h3>Cost per Point by Specialty</h3>
+            {Object.keys(breakdownBySpecialty).map((spec) => {
+              const sCost = breakdownBySpecialty[spec].cost;
+              const sPoints = breakdownBySpecialty[spec].points;
+              const costPerPointSpec = sPoints > 0 ? sCost / sPoints : 0;
+              return (
+                <div key={spec}>
+                  <strong>{spec}:</strong> ${costPerPointSpec.toFixed(2)} per point
+                </div>
+              );
+            })}
+
+            <h3>Team Members in this period</h3>
+            <ul>
+              {usedRoles.map((r) => (
+                <li key={r.id}>
+                  {r.name} ({r.specialty}) — Salary: $
+                  {Math.round(r.salary).toLocaleString()}{' '}
+                  {r.fte ? '(FTE)' : '(Contract)'}
+                </li>
+              ))}
+            </ul>
+
+            <h3>Events in this period</h3>
+            <ul>
+              {usedEvents.map((ev) => (
+                <li key={ev.id}>
+                  {ev.name} (Impact: {ev.impactPoints}; Repeat: {ev.repeatForever ? 'Yes' : 'No'})
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      };
+
+      // -------------------------------------------
+      // Main return
+      // -------------------------------------------
+      return (
+        <div className="tps-container">
+          {/* LEFT SIDE: YEAR TIMELINE */}
+          <div className="timeline">
+            <div
+              className="bubble year-bubble"
+              onClick={() => handleGenerateReport('2025')}
+            >
+              2025
+            </div>
+            {yearStructure.quarters.map((q) => (
+              <div key={q.id} className="quarter-block">
+                <div
+                  className="bubble quarter-bubble"
+                  onClick={() => handleGenerateReport(q.id)}
+                >
+                  {q.id}
+                </div>
+                <div className="sprints-row">
+                  {q.sprints.map((sprint) => (
+                    <div
+                      key={sprint.id}
+                      className="bubble sprint-bubble"
+                      onClick={() => handleGenerateReport(sprint.id)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => handleDropOnSprint(sprint.id, q.id)}
+                    >
+                      {sprint.id}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* RIGHT SIDE: ROSTER */}
+          <div className="roster">
+            <div className="roster-header">
+              <h3>Roster</h3>
+              <button onClick={handleAddNewItem}>+</button>
+            </div>
+            <div className="roster-items">
+              <h4>Roles</h4>
+              {roles.map((role) => (
+                <div
+                  key={role.id}
+                  className="draggable-item"
+                  draggable
+                  onDragStart={() => handleDragStart(role, 'role')}
+                >
+                  {role.name} ({role.specialty})
+                </div>
+              ))}
+              <h4>Events</h4>
+              {events.map((event) => (
+                <div
+                  key={event.id}
+                  className="draggable-item"
+                  draggable
+                  onDragStart={() => handleDragStart(event, 'event')}
+                >
+                  {event.name} (Impact: {event.impactPoints})
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* BOTTOM: REPORT SECTION */}
+          <div className="report-section">{renderReport()}</div>
+        </div>
+      );
+    }
+
+    // Render the app into #root
+    const rootElement = document.getElementById('root');
+    ReactDOM.createRoot(rootElement).render(<TPSReports />);
+  </script>
+</body>
+</html>
+
